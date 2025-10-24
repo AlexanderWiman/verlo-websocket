@@ -54,12 +54,16 @@ async function getCachedTranslation(from, to, text) {
     if (cached) {
       console.log(`💾 Redis HIT: ${key}`);
       console.log(`📦 Raw cached value: ${cached} (type: ${typeof cached})`);
+      
+      // Handle case where Redis returns an object instead of string
+      const cachedString = typeof cached === 'string' ? cached : JSON.stringify(cached);
+      
       try {
-        const parsed = JSON.parse(cached);
+        const parsed = JSON.parse(cachedString);
         return parsed;
       } catch (parseError) {
         console.error(`❌ JSON parse error for key ${key}:`, parseError);
-        console.error(`❌ Cached value: ${cached}`);
+        console.error(`❌ Cached value: ${cachedString}`);
         return null;
       }
     }
