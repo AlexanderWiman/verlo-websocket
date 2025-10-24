@@ -20,6 +20,11 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'WebSocket server is running' });
 });
 
+// WebSocket endpoint info
+app.get('/ws', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'WebSocket endpoint available', protocol: 'wss' });
+});
+
 // WebSocket upgrade handler
 server.on('upgrade', (request, socket, head) => {
   console.log('🔌 WebSocket upgrade request:', request.url);
