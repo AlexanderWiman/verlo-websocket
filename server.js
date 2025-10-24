@@ -8,16 +8,11 @@ import { Redis } from '@upstash/redis';
 
 const app = express();
 const server = createServer(app);
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ noServer: true });
 
 // Health check endpoint
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'WebSocket server is running' });
-});
-
-// WebSocket endpoint
-app.get('/ws', (req, res) => {
-  res.json({ status: 'ok', message: 'WebSocket endpoint available' });
 });
 
 // WebSocket upgrade handler
