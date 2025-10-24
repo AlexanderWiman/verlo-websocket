@@ -53,8 +53,15 @@ async function getCachedTranslation(from, to, text) {
     const cached = await redis.get(key);
     if (cached) {
       console.log(`💾 Redis HIT: ${key}`);
-      const parsed = JSON.parse(cached);
-      return parsed;
+      console.log(`📦 Raw cached value: ${cached} (type: ${typeof cached})`);
+      try {
+        const parsed = JSON.parse(cached);
+        return parsed;
+      } catch (parseError) {
+        console.error(`❌ JSON parse error for key ${key}:`, parseError);
+        console.error(`❌ Cached value: ${cached}`);
+        return null;
+      }
     }
   } catch (e) {
     console.warn("Redis get failed", e);
