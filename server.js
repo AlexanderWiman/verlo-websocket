@@ -22,16 +22,18 @@ app.get('/health', (req, res) => {
 
 // WebSocket upgrade handler
 server.on('upgrade', (request, socket, head) => {
-  console.log('WebSocket upgrade request:', request.url);
+  console.log('🔌 WebSocket upgrade request:', request.url);
+  console.log('🔌 Request headers:', request.headers);
   
   // Handle upgrade request
   wss.handleUpgrade(request, socket, head, (ws) => {
+    console.log('✅ WebSocket upgrade successful');
     wss.emit('connection', ws, request);
   });
   
   // Handle upgrade errors
   socket.on('error', (error) => {
-    console.error('WebSocket upgrade error:', error);
+    console.error('❌ WebSocket upgrade error:', error);
   });
 });
 
