@@ -163,8 +163,8 @@ wss.on('connection', (ws, request) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => {
+const PORT = process.env.PORT || 8080; // Railway sets PORT automatically
+server.listen(PORT, () => {
   console.log(`✅ WebSocket server running on port ${PORT}`);
   console.log(`Health: https://verlo-websocket-production.up.railway.app/health`);
 });
