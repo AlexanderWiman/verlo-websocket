@@ -15,11 +15,23 @@ app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'WebSocket server is running' });
 });
 
+// WebSocket endpoint
+app.get('/ws', (req, res) => {
+  res.json({ status: 'ok', message: 'WebSocket endpoint available' });
+});
+
 // WebSocket upgrade handler
 server.on('upgrade', (request, socket, head) => {
   console.log('WebSocket upgrade request:', request.url);
+  
+  // Handle upgrade request
   wss.handleUpgrade(request, socket, head, (ws) => {
     wss.emit('connection', ws, request);
+  });
+  
+  // Handle upgrade errors
+  socket.on('error', (error) => {
+    console.error('WebSocket upgrade error:', error);
   });
 });
 
@@ -235,11 +247,35 @@ wss.on('connection', (ws) => {
 });
 
 const PORT = process.env.PORT || 3000;
+
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`WebSocket server running on port ${PORT}`);
+  console.log(`✅ WebSocket server running on port ${PORT}`);
   console.log(`Environment variables check:`, {
     hasOpenAI: !!process.env.OPENAI_API_KEY,
     hasRedis: !!process.env.UPSTASH_REDIS_REST_URL,
+  });
+  console.log(`Health check: http://0.0.0.0:${PORT}/`);
+});
+
+// Handle server errors
+server.on('error', (error) => {
+  console.error('Server error:', error);
+});
+
+// Handle process termination
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, closing server gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, closing server gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
   });
 });
 
