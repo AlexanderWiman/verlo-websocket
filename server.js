@@ -10,6 +10,11 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
+// Health check endpoint
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'WebSocket server is running' });
+});
+
 const LANGUAGE_NAMES = {
   'sv': 'Swedish', 'en': 'English', 'tr': 'Turkish', 'ar': 'Arabic',
   'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian',
