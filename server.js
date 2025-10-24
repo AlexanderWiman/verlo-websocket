@@ -15,6 +15,13 @@ app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'WebSocket server is running' });
 });
 
+// WebSocket upgrade handler
+server.on('upgrade', (request, socket, head) => {
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.emit('connection', ws, request);
+  });
+});
+
 const LANGUAGE_NAMES = {
   'sv': 'Swedish', 'en': 'English', 'tr': 'Turkish', 'ar': 'Arabic',
   'es': 'Spanish', 'fr': 'French', 'de': 'German', 'it': 'Italian',
