@@ -98,17 +98,18 @@ wss.on('connection', (ws, request) => {
 
         case 'stop':
           const combinedAudio = audioChunks.join('');
-          const cleanBase64 = combinedAudio.replace(/^data:audio\/\w+;base64,/, "");
-          const audioBuffer = Buffer.from(cleanBase64, "base64");
-          const tmpPath = path.join('/tmp', `audio_${Date.now()}.wav`);
+          const audioBuffer = Buffer.from(combinedAudio, "base64");
+          const tmpPath = path.join('/tmp', `audio_${Date.now()}.m4a`);
           fs.writeFileSync(tmpPath, audioBuffer);
+
+          console.log(`📁 Audio file saved: ${tmpPath} (${audioBuffer.length} bytes)`);
 
           const transcriptionRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
             method: 'POST',
             headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
             body: (() => {
               const f = new FormData();
-              f.append('file', new Blob([audioBuffer]), 'audio.wav');
+              f.append('file', new Blob([audioBuffer]), 'audio.m4a');
               f.append('model', 'whisper-1');
               f.append('language', fromLang);
               f.append('response_format', 'json');
@@ -116,7 +117,16 @@ wss.on('connection', (ws, request) => {
             })(),
           });
 
-          const { text: originalText } = await transcriptionRes.json();
+          if (!transcriptionRes.ok) {
+            const errorText = await transcriptionRes.text();
+            console.error(`❌ Whisper API error: ${transcriptionRes.status} ${errorText}`);
+            ws.send(JSON.stringify({ type: 'error', error: `Whisper API error: ${transcriptionRes.status}` }));
+            fs.unlinkSync(tmpPath);
+            return;
+          }
+
+          const transcriptionData = await transcriptionRes.json();
+          const originalText = transcriptionData.text;
           fs.unlinkSync(tmpPath);
           
           if (!originalText) {
