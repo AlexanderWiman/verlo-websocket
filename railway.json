@@ -9,7 +9,6 @@
     "restartPolicyMaxRetries": 10
   },
   "healthcheckPath": "/",
-  "healthcheckTimeout": 100
+  "healthcheckTimeout": 300
 }
-
 
