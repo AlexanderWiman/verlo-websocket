@@ -47,6 +47,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Cache helpers
 async function getCachedTranslation(from, to, text) {
+  if (!text) return null;
   const key = `t:${from}:${to}:${text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "").slice(0, 120)}`;
   try {
     const cached = await redis.get(key);
@@ -60,6 +61,7 @@ async function getCachedTranslation(from, to, text) {
   return null;
 }
 async function setCachedTranslation(from, to, text, value) {
+  if (!text) return;
   const key = `t:${from}:${to}:${text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "").slice(0, 120)}`;
   const wordCount = text.split(" ").length;
   const ttl = wordCount <= 5 ? 86400 : 3600;
@@ -116,6 +118,12 @@ wss.on('connection', (ws, request) => {
 
           const { text: originalText } = await transcriptionRes.json();
           fs.unlinkSync(tmpPath);
+          
+          if (!originalText) {
+            ws.send(JSON.stringify({ type: 'error', error: 'No text transcribed from audio' }));
+            return;
+          }
+          
           ws.send(JSON.stringify({ type: 'partial', text: originalText }));
 
           const cached = await getCachedTranslation(fromLang, toLang, originalText);
