@@ -10,38 +10,40 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
-// Health check endpoint - responds immediately
+// Enable CORS for all origins
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// Health check endpoint
 app.get('/', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'WebSocket server is running' });
 });
 
-// Health check endpoint - responds immediately
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'WebSocket server is running' });
-});
-
-// WebSocket endpoint info
-app.get('/ws', (req, res) => {
-  res.status(200).json({ status: 'ok', message: 'WebSocket endpoint available', protocol: 'wss' });
 });
 
 // WebSocket upgrade handler
 server.on('upgrade', (request, socket, head) => {
   console.log('🔌 WebSocket upgrade request:', request.url);
-  console.log('🔌 Request headers:', request.headers);
+  console.log('🔌 Request headers:', JSON.stringify(request.headers, null, 2));
   
-  // Handle upgrade request
   wss.handleUpgrade(request, socket, head, (ws) => {
     console.log('✅ WebSocket upgrade successful');
     wss.emit('connection', ws, request);
   });
   
-  // Handle upgrade errors
   socket.on('error', (error) => {
     console.error('❌ WebSocket upgrade error:', error);
   });
   
-  // Handle socket close
   socket.on('close', () => {
     console.log('🔌 WebSocket socket closed');
   });
@@ -97,8 +99,13 @@ async function setCachedTranslation(from, to, text, value) {
   }
 }
 
-wss.on('connection', (ws) => {
-  console.log('WebSocket connection established');
+// WebSocket connection handler
+wss.on('connection', (ws, request) => {
+  console.log('🔌 WebSocket connection established');
+  console.log('🔌 Remote address:', request.socket.remoteAddress);
+  
+  // Send welcome message
+  ws.send(JSON.stringify({ type: 'connected', message: 'WebSocket server ready' }));
   
   let audioChunks = [];
   let sessionId = null;
@@ -108,6 +115,7 @@ wss.on('connection', (ws) => {
   ws.on('message', async (message) => {
     try {
       const data = JSON.parse(message.toString());
+      console.log('📨 Received message:', data.type);
       
       switch (data.type) {
         case 'start':
@@ -115,17 +123,17 @@ wss.on('connection', (ws) => {
           fromLang = data.fromLang;
           toLang = data.toLang;
           audioChunks = [];
-          console.log(`Session started: ${sessionId}`);
+          console.log(`🚀 Session started: ${sessionId} (${fromLang} → ${toLang})`);
           ws.send(JSON.stringify({ type: 'connected', sessionId }));
           break;
           
         case 'chunk':
           audioChunks.push(data.audio);
-          console.log(`Received audio chunk, total: ${audioChunks.length}`);
+          console.log(`📦 Received audio chunk, total: ${audioChunks.length}`);
           break;
           
         case 'stop':
-          console.log(`Processing audio for session: ${sessionId}`);
+          console.log(`⏹️  Processing audio for session: ${sessionId}`);
           
           // Combine audio chunks
           const combinedAudio = audioChunks.join('');
@@ -174,7 +182,7 @@ wss.on('connection', (ws) => {
           const cached = await getCachedTranslation(fromLang, toLang, originalText);
           
           if (cached) {
-            console.log('Cache HIT! Returning cached translation');
+            console.log('💾 Cache HIT! Returning cached translation');
             ws.send(JSON.stringify({ type: 'final', original: originalText, translated: cached.t, cached: true }));
             
             // Generate audio for cached translation
@@ -243,18 +251,27 @@ wss.on('connection', (ws) => {
           
           ws.send(JSON.stringify({ type: 'audio', url: audioDataUrl }));
           ws.send(JSON.stringify({ type: 'end', sessionId }));
+          break;
+          
+        case 'ping':
+          ws.send(JSON.stringify({ type: 'pong' }));
+          break;
           
         default:
-          console.log('Unknown message type:', data.type);
+          console.log('⚠️  Unknown message type:', data.type);
       }
     } catch (error) {
-      console.error('WebSocket error:', error);
+      console.error('❌ WebSocket error:', error);
       ws.send(JSON.stringify({ type: 'error', error: error.message }));
     }
   });
   
   ws.on('close', () => {
-    console.log('WebSocket connection closed');
+    console.log('🔌 WebSocket connection closed');
+  });
+  
+  ws.on('error', (error) => {
+    console.error('❌ WebSocket error:', error);
   });
 });
 
@@ -290,4 +307,3 @@ process.on('SIGINT', () => {
     process.exit(0);
   });
 });
-
