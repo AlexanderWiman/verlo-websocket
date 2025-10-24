@@ -104,67 +104,58 @@ wss.on('connection', (ws, request) => {
 
           console.log(`📁 Audio file saved: ${tmpPath} (${audioBuffer.length} bytes)`);
 
-          const transcriptionRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-            body: (() => {
-              const f = new FormData();
-              f.append('file', new Blob([audioBuffer]), 'audio.m4a');
-              f.append('model', 'whisper-1');
-              f.append('language', fromLang);
-              f.append('response_format', 'json');
-              return f;
-            })(),
-          });
-
-          if (!transcriptionRes.ok) {
-            const errorText = await transcriptionRes.text();
-            console.error(`❌ Whisper API error: ${transcriptionRes.status} ${errorText}`);
-            ws.send(JSON.stringify({ type: 'error', error: `Whisper API error: ${transcriptionRes.status}` }));
+          try {
+            const transcriptionData = await openai.audio.transcriptions.create({
+              file: fs.createReadStream(tmpPath),
+              model: 'whisper-1',
+              language: fromLang,
+              response_format: 'json'
+            });
+            const originalText = transcriptionData.text;
             fs.unlinkSync(tmpPath);
-            return;
+            
+            if (!originalText) {
+              ws.send(JSON.stringify({ type: 'error', error: 'No text transcribed from audio' }));
+              return;
+            }
+            
+            ws.send(JSON.stringify({ type: 'partial', text: originalText }));
+
+            const cached = await getCachedTranslation(fromLang, toLang, originalText);
+            const fromLangName = getLanguageName(fromLang);
+            const toLangName = getLanguageName(toLang);
+
+            const translated = cached?.t ?? (
+              await openai.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: [
+                  { role: 'system', content: `Translate from ${fromLangName} to ${toLangName}. Only return translation.` },
+                  { role: 'user', content: originalText }
+                ],
+                temperature: 0,
+                max_tokens: 100
+              })
+            ).choices[0].message.content;
+
+            ws.send(JSON.stringify({ type: 'final', original: originalText, translated, cached: !!cached }));
+            if (!cached) await setCachedTranslation(fromLang, toLang, originalText, { t: translated });
+
+            const tts = await openai.audio.speech.create({
+              model: 'tts-1',
+              voice: toLang === 'en' ? 'alloy' : 'nova',
+              input: translated,
+              speed: 1.0,
+              response_format: 'mp3',
+            });
+            const ttsBase64 = Buffer.from(await tts.arrayBuffer()).toString('base64');
+            ws.send(JSON.stringify({ type: 'audio', url: `data:audio/mp3;base64,${ttsBase64}` }));
+            ws.send(JSON.stringify({ type: 'end', sessionId }));
+            
+          } catch (error) {
+            console.error(`❌ Transcription error:`, error);
+            ws.send(JSON.stringify({ type: 'error', error: `Transcription failed: ${error.message}` }));
+            if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
           }
-
-          const transcriptionData = await transcriptionRes.json();
-          const originalText = transcriptionData.text;
-          fs.unlinkSync(tmpPath);
-          
-          if (!originalText) {
-            ws.send(JSON.stringify({ type: 'error', error: 'No text transcribed from audio' }));
-            return;
-          }
-          
-          ws.send(JSON.stringify({ type: 'partial', text: originalText }));
-
-          const cached = await getCachedTranslation(fromLang, toLang, originalText);
-          const fromLangName = getLanguageName(fromLang);
-          const toLangName = getLanguageName(toLang);
-
-          const translated = cached?.t ?? (
-            await openai.chat.completions.create({
-              model: 'gpt-4o-mini',
-              messages: [
-                { role: 'system', content: `Translate from ${fromLangName} to ${toLangName}. Only return translation.` },
-                { role: 'user', content: originalText }
-              ],
-              temperature: 0,
-              max_tokens: 100
-            })
-          ).choices[0].message.content;
-
-          ws.send(JSON.stringify({ type: 'final', original: originalText, translated, cached: !!cached }));
-          if (!cached) await setCachedTranslation(fromLang, toLang, originalText, { t: translated });
-
-          const tts = await openai.audio.speech.create({
-            model: 'tts-1',
-            voice: toLang === 'en' ? 'alloy' : 'nova',
-            input: translated,
-            speed: 1.0,
-            response_format: 'mp3',
-          });
-          const ttsBase64 = Buffer.from(await tts.arrayBuffer()).toString('base64');
-          ws.send(JSON.stringify({ type: 'audio', url: `data:audio/mp3;base64,${ttsBase64}` }));
-          ws.send(JSON.stringify({ type: 'end', sessionId }));
           break;
 
         case 'ping':
