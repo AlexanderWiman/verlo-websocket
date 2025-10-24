@@ -135,6 +135,7 @@ wss.on('connection', (ws, request) => {
               fromLang, // ✅ fixed
               toLang,   // ✅ fixed
             }));
+            console.log(`📤 Final message sent (cached): fromLang=${fromLang}, toLang=${toLang}`);
 
             // Generate audio for cached translation
             const ttsResponse = await openai.audio.speech.create({
@@ -179,6 +180,7 @@ wss.on('connection', (ws, request) => {
             fromLang,
             toLang,
           }));
+          console.log(`📤 Final message sent: fromLang=${fromLang}, toLang=${toLang}`);
 
           // Cache it
           await setCachedTranslation(fromLang, toLang, originalText, { t: translatedText, a: null });
