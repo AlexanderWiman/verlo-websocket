@@ -131,6 +131,7 @@ wss.on('connection', (ws, request) => {
           console.log(`📁 Audio file saved: ${tmpPath} (${audioBuffer.length} bytes)`);
 
           try {
+            console.log(`🎤 Whisper API call: language=${fromLang}, file=${tmpPath}`);
             const transcriptionData = await openai.audio.transcriptions.create({
               file: fs.createReadStream(tmpPath),
               model: 'whisper-1',
@@ -138,6 +139,7 @@ wss.on('connection', (ws, request) => {
               response_format: 'json'
             });
             const originalText = transcriptionData.text;
+            console.log(`🎤 Whisper result: "${originalText}" (expected language: ${fromLang})`);
             fs.unlinkSync(tmpPath);
             
             if (!originalText) {
