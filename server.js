@@ -89,6 +89,7 @@ wss.on('connection', (ws, request) => {
           fromLang = data.fromLang;
           toLang = data.toLang;
           audioChunks = [];
+          console.log(`🎯 Session started: ${sessionId}, fromLang: ${fromLang}, toLang: ${toLang}`);
           ws.send(JSON.stringify({ type: 'connected', sessionId }));
           break;
 
@@ -97,6 +98,7 @@ wss.on('connection', (ws, request) => {
           break;
 
         case 'stop':
+          console.log(`🛑 Stop received - sessionId: ${sessionId}, fromLang: ${fromLang}, toLang: ${toLang}`);
           const combinedAudio = audioChunks.join('');
           const audioBuffer = Buffer.from(combinedAudio, "base64");
           const tmpPath = path.join('/tmp', `audio_${Date.now()}.m4a`);
