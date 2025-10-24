@@ -168,7 +168,7 @@ wss.on('connection', (ws, request) => {
             ).choices[0].message.content;
 
             if (ws.readyState === ws.OPEN) {
-              ws.send(JSON.stringify({ type: 'final', original: originalText, translated, cached: !!cached }));
+              ws.send(JSON.stringify({ type: 'final', original: originalText, translated, cached: !!cached, fromLang, toLang }));
             }
             if (!cached) await setCachedTranslation(fromLang, toLang, originalText, { t: translated });
 
