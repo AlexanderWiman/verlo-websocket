@@ -117,6 +117,7 @@ wss.on('connection', (ws, request) => {
           fs.writeFileSync(tmpPath, audioBuffer);
 
           // 1. Transcribe with Whisper
+          const whisperStart = Date.now();
           const transcriptionRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
             method: 'POST',
             headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
@@ -131,6 +132,8 @@ wss.on('connection', (ws, request) => {
           });
 
           const { text: originalText } = await transcriptionRes.json();
+          const whisperTime = Date.now() - whisperStart;
+          console.log(`⏱️ Whisper time: ${whisperTime}ms`);
           fs.unlinkSync(tmpPath);
           
           // Validate originalText
@@ -178,6 +181,7 @@ wss.on('connection', (ws, request) => {
           }
 
           // 3. Translate via GPT
+          const gptStart = Date.now();
           const translationResponse = await openai.chat.completions.create({
             model: 'gpt-4o-mini',
             messages: [
@@ -192,6 +196,8 @@ wss.on('connection', (ws, request) => {
           });
 
           const translatedText = translationResponse.choices[0].message.content;
+          const gptTime = Date.now() - gptStart;
+          console.log(`⏱️ GPT time: ${gptTime}ms`);
 
           // ✅ fixed: correct order
           ws.send(JSON.stringify({
@@ -208,6 +214,7 @@ wss.on('connection', (ws, request) => {
           await setCachedTranslation(fromLang, toLang, originalText, { t: translatedText, a: null });
 
           // 4. Generate TTS
+          const ttsStart = Date.now();
           const tts = await openai.audio.speech.create({
             model: 'tts-1',
             voice: toLang === 'en' ? 'alloy' : 'nova',
@@ -217,6 +224,8 @@ wss.on('connection', (ws, request) => {
           });
 
           const ttsBase64 = Buffer.from(await tts.arrayBuffer()).toString('base64');
+          const ttsTime = Date.now() - ttsStart;
+          console.log(`⏱️ TTS time: ${ttsTime}ms`);
           ws.send(JSON.stringify({ type: 'audio', url: `data:audio/mp3;base64,${ttsBase64}` }));
           ws.send(JSON.stringify({ type: 'end', sessionId }));
           break;
