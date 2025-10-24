@@ -17,6 +17,7 @@ app.get('/', (req, res) => {
 
 // WebSocket upgrade handler
 server.on('upgrade', (request, socket, head) => {
+  console.log('WebSocket upgrade request:', request.url);
   wss.handleUpgrade(request, socket, head, (ws) => {
     wss.emit('connection', ws, request);
   });
