@@ -132,6 +132,14 @@ wss.on('connection', (ws, request) => {
 
           const { text: originalText } = await transcriptionRes.json();
           fs.unlinkSync(tmpPath);
+          
+          // Validate originalText
+          if (!originalText || typeof originalText !== 'string') {
+            console.error('❌ Invalid originalText:', originalText);
+            ws.send(JSON.stringify({ type: 'error', error: 'No text transcribed from audio' }));
+            return;
+          }
+          
           ws.send(JSON.stringify({ type: 'partial', text: originalText }));
 
           // 2. Cache check
