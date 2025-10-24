@@ -99,6 +99,14 @@ wss.on('connection', (ws, request) => {
 
         case 'stop':
           console.log(`🛑 Stop received - sessionId: ${sessionId}, fromLang: ${fromLang}, toLang: ${toLang}`);
+          
+          // Fallback if session data is missing
+          if (!fromLang || !toLang) {
+            console.log('⚠️ Missing session data, using defaults');
+            fromLang = fromLang || 'sv'; // Default to Swedish
+            toLang = toLang || 'en'; // Default to English
+          }
+          
           const combinedAudio = audioChunks.join('');
           const audioBuffer = Buffer.from(combinedAudio, "base64");
           const tmpPath = path.join('/tmp', `audio_${Date.now()}.m4a`);
