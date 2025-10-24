@@ -47,12 +47,14 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Cache helpers
 async function getCachedTranslation(from, to, text) {
+  if (!text) return null;
   const key = `t:${from}:${to}:${text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "").slice(0, 120)}`;
   try {
     const cached = await redis.get(key);
     if (cached) {
       console.log(`💾 Redis HIT: ${key}`);
-      return JSON.parse(cached);
+      const parsed = JSON.parse(cached);
+      return parsed;
     }
   } catch (e) {
     console.warn("Redis get failed", e);
@@ -60,6 +62,7 @@ async function getCachedTranslation(from, to, text) {
   return null;
 }
 async function setCachedTranslation(from, to, text, value) {
+  if (!text) return;
   const key = `t:${from}:${to}:${text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "").slice(0, 120)}`;
   const wordCount = text.split(" ").length;
   const ttl = wordCount <= 5 ? 86400 : 3600;
