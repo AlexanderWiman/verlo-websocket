@@ -235,7 +235,11 @@ wss.on('connection', (ws) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`WebSocket server running on port ${PORT}`);
+  console.log(`Environment variables check:`, {
+    hasOpenAI: !!process.env.OPENAI_API_KEY,
+    hasRedis: !!process.env.UPSTASH_REDIS_REST_URL,
+  });
 });
 
