@@ -80,6 +80,22 @@ wss.on('connection', (ws, request) => {
 
   let audioChunks = [], sessionId, fromLang, toLang;
 
+  // Keep connection alive
+  const pingInterval = setInterval(() => {
+    if (ws.readyState === ws.OPEN) {
+      ws.ping();
+    }
+  }, 30000);
+
+  ws.on('pong', () => {
+    console.log('🏓 Pong received');
+  });
+
+  ws.on('close', () => {
+    console.log('🔌 WS closed');
+    clearInterval(pingInterval);
+  });
+
   ws.on('message', async (msg) => {
     try {
       const data = JSON.parse(msg.toString());
@@ -129,7 +145,9 @@ wss.on('connection', (ws, request) => {
               return;
             }
             
-            ws.send(JSON.stringify({ type: 'partial', text: originalText }));
+            if (ws.readyState === ws.OPEN) {
+              ws.send(JSON.stringify({ type: 'partial', text: originalText }));
+            }
 
             const cached = await getCachedTranslation(fromLang, toLang, originalText);
             const fromLangName = getLanguageName(fromLang);
@@ -147,7 +165,9 @@ wss.on('connection', (ws, request) => {
               })
             ).choices[0].message.content;
 
-            ws.send(JSON.stringify({ type: 'final', original: originalText, translated, cached: !!cached }));
+            if (ws.readyState === ws.OPEN) {
+              ws.send(JSON.stringify({ type: 'final', original: originalText, translated, cached: !!cached }));
+            }
             if (!cached) await setCachedTranslation(fromLang, toLang, originalText, { t: translated });
 
             const tts = await openai.audio.speech.create({
@@ -158,8 +178,14 @@ wss.on('connection', (ws, request) => {
               response_format: 'mp3',
             });
             const ttsBase64 = Buffer.from(await tts.arrayBuffer()).toString('base64');
-            ws.send(JSON.stringify({ type: 'audio', url: `data:audio/mp3;base64,${ttsBase64}` }));
-            ws.send(JSON.stringify({ type: 'end', sessionId }));
+            
+            // Check if WebSocket is still open before sending
+            if (ws.readyState === ws.OPEN) {
+              ws.send(JSON.stringify({ type: 'audio', url: `data:audio/mp3;base64,${ttsBase64}` }));
+              ws.send(JSON.stringify({ type: 'end', sessionId }));
+            } else {
+              console.log('⚠️ WebSocket closed, cannot send audio');
+            }
             
           } catch (error) {
             console.error(`❌ Transcription error:`, error);
