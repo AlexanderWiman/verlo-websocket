@@ -10,9 +10,14 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
-// Health check endpoint
+// Health check endpoint - responds immediately
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', message: 'WebSocket server is running' });
+  res.status(200).json({ status: 'ok', message: 'WebSocket server is running' });
+});
+
+// Health check endpoint - responds immediately
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'WebSocket server is running' });
 });
 
 // WebSocket upgrade handler
