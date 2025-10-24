@@ -35,6 +35,11 @@ server.on('upgrade', (request, socket, head) => {
   socket.on('error', (error) => {
     console.error('❌ WebSocket upgrade error:', error);
   });
+  
+  // Handle socket close
+  socket.on('close', () => {
+    console.log('🔌 WebSocket socket closed');
+  });
 });
 
 const LANGUAGE_NAMES = {
