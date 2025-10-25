@@ -127,6 +127,8 @@ wss.on('connection', (ws, request) => {
               f.append('model', 'whisper-1');
               f.append('language', fromLang);
               f.append('response_format', 'json');
+              f.append('temperature', '0.0');
+              f.append('compression_ratio_threshold', '2.4');
               return f;
             })(),
           });
@@ -191,8 +193,11 @@ wss.on('connection', (ws, request) => {
               },
               { role: 'user', content: originalText }
             ],
-            max_tokens: 100,
+            max_tokens: 50,
             temperature: 0.0,
+            top_p: 0.1,
+            frequency_penalty: 0,
+            presence_penalty: 0,
           });
 
           const translatedText = translationResponse.choices[0].message.content;
@@ -210,24 +215,29 @@ wss.on('connection', (ws, request) => {
           }));
           console.log(`📤 Final message sent: fromLang=${fromLang}, toLang=${toLang}`);
 
-          // Cache it
-          await setCachedTranslation(fromLang, toLang, originalText, { t: translatedText, a: null });
+          // Cache it (non-blocking)
+          setCachedTranslation(fromLang, toLang, originalText, { t: translatedText, a: null }).catch(e => console.warn('Cache set failed:', e));
 
-          // 4. Generate TTS
-          const ttsStart = Date.now();
-          const tts = await openai.audio.speech.create({
-            model: 'tts-1',
-            voice: toLang === 'en' ? 'alloy' : 'nova',
-            input: translatedText,
-            speed: 1.0,
-            response_format: 'mp3',
+          // 4. Generate TTS in parallel (non-blocking)
+          (async () => {
+            const ttsStart = Date.now();
+            const tts = await openai.audio.speech.create({
+              model: 'tts-1',
+              voice: toLang === 'en' ? 'alloy' : 'nova',
+              input: translatedText,
+              speed: 1.2,
+              response_format: 'mp3',
+            });
+
+            const ttsBase64 = Buffer.from(await tts.arrayBuffer()).toString('base64');
+            const ttsTime = Date.now() - ttsStart;
+            console.log(`⏱️ TTS time: ${ttsTime}ms`);
+            ws.send(JSON.stringify({ type: 'audio', url: `data:audio/mp3;base64,${ttsBase64}` }));
+            ws.send(JSON.stringify({ type: 'end', sessionId }));
+          })().catch(err => {
+            console.error('TTS generation failed:', err);
+            ws.send(JSON.stringify({ type: 'end', sessionId }));
           });
-
-          const ttsBase64 = Buffer.from(await tts.arrayBuffer()).toString('base64');
-          const ttsTime = Date.now() - ttsStart;
-          console.log(`⏱️ TTS time: ${ttsTime}ms`);
-          ws.send(JSON.stringify({ type: 'audio', url: `data:audio/mp3;base64,${ttsBase64}` }));
-          ws.send(JSON.stringify({ type: 'end', sessionId }));
           break;
 
         case 'ping':
