@@ -46,6 +46,24 @@ const redis = new Redis({
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Cache helpers
+async function splitTextIntoChunks(text, maxChunkLength = 50) {
+  const words = text.split(' ');
+  const chunks = [];
+  let currentChunk = '';
+  
+  for (const word of words) {
+    if (currentChunk.length + word.length + 1 <= maxChunkLength) {
+      currentChunk += (currentChunk ? ' ' : '') + word;
+    } else {
+      if (currentChunk) chunks.push(currentChunk);
+      currentChunk = word;
+    }
+  }
+  
+  if (currentChunk) chunks.push(currentChunk);
+  return chunks;
+}
+
 async function getCachedTranslation(from, to, text) {
   if (!text) return null;
   const key = `t:${from}:${to}:${text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "").slice(0, 120)}`;
@@ -218,24 +236,71 @@ wss.on('connection', (ws, request) => {
           // Cache it (non-blocking)
           setCachedTranslation(fromLang, toLang, originalText, { t: translatedText, a: null }).catch(e => console.warn('Cache set failed:', e));
 
-          // 4. Generate TTS in parallel (non-blocking)
+          // 4. Generate streaming TTS
           (async () => {
             const ttsStart = Date.now();
-            const tts = await openai.audio.speech.create({
-              model: 'tts-1',
-              voice: toLang === 'en' ? 'alloy' : 'nova',
-              input: translatedText,
-              speed: 1.2,
-              response_format: 'mp3',
+            
+            // Split text into chunks for streaming
+            const textChunks = await splitTextIntoChunks(translatedText, 30);
+            console.log(`🎵 Streaming TTS: ${textChunks.length} chunks`);
+            
+            // Generate TTS for each chunk in parallel
+            const ttsPromises = textChunks.map(async (chunk, index) => {
+              const chunkStart = Date.now();
+              const tts = await openai.audio.speech.create({
+                model: 'tts-1',
+                voice: toLang === 'en' ? 'alloy' : 'nova',
+                input: chunk,
+                speed: 1.2,
+                response_format: 'mp3',
+              });
+              
+              const ttsBase64 = Buffer.from(await tts.arrayBuffer()).toString('base64');
+              const chunkTime = Date.now() - chunkStart;
+              console.log(`🎵 Chunk ${index + 1}/${textChunks.length} ready in ${chunkTime}ms`);
+              
+              return {
+                index,
+                audio: `data:audio/mp3;base64,${ttsBase64}`,
+                chunkTime
+              };
             });
-
-            const ttsBase64 = Buffer.from(await tts.arrayBuffer()).toString('base64');
-            const ttsTime = Date.now() - ttsStart;
-            console.log(`⏱️ TTS time: ${ttsTime}ms`);
-            ws.send(JSON.stringify({ type: 'audio', url: `data:audio/mp3;base64,${ttsBase64}` }));
+            
+            // Send chunks as they become available
+            const chunkResults = await Promise.all(ttsPromises);
+            
+            // Send first chunk immediately
+            if (chunkResults.length > 0) {
+              ws.send(JSON.stringify({ 
+                type: 'audio_chunk', 
+                url: chunkResults[0].audio,
+                chunkIndex: 0,
+                totalChunks: chunkResults.length
+              }));
+              console.log(`🎵 First chunk sent in ${Date.now() - ttsStart}ms`);
+            }
+            
+            // Send remaining chunks
+            for (let i = 1; i < chunkResults.length; i++) {
+              ws.send(JSON.stringify({ 
+                type: 'audio_chunk', 
+                url: chunkResults[i].audio,
+                chunkIndex: i,
+                totalChunks: chunkResults.length
+              }));
+            }
+            
+            // Send completion signal
+            ws.send(JSON.stringify({ 
+              type: 'audio_complete',
+              totalChunks: chunkResults.length
+            }));
+            
+            const totalTtsTime = Date.now() - ttsStart;
+            console.log(`⏱️ Streaming TTS time: ${totalTtsTime}ms`);
             ws.send(JSON.stringify({ type: 'end', sessionId }));
           })().catch(err => {
-            console.error('TTS generation failed:', err);
+            console.error('Streaming TTS generation failed:', err);
             ws.send(JSON.stringify({ type: 'end', sessionId }));
           });
           break;
