@@ -131,7 +131,14 @@ wss.on('connection', (ws, request) => {
           const combinedAudio = audioChunks.join('');
           const cleanBase64 = combinedAudio.replace(/^data:audio\/\w+;base64,/, "");
           const audioBuffer = Buffer.from(cleanBase64, "base64");
-          const tmpPath = path.join('/tmp', `audio_${Date.now()}.wav`);
+          
+          // Determine audio format from the data URI or default to m4a
+          const dataUriMatch = combinedAudio.match(/^data:(audio\/\w+)/);
+          const mimeType = dataUriMatch ? dataUriMatch[1] : 'audio/m4a';
+          const extension = mimeType.includes('wav') ? '.wav' : '.m4a';
+          const tmpPath = path.join('/tmp', `audio_${Date.now()}${extension}`);
+          
+          console.log(`📁 Saving audio as ${extension}, detected MIME: ${mimeType}`);
           fs.writeFileSync(tmpPath, audioBuffer);
 
           // 1. Transcribe with Whisper
@@ -141,7 +148,7 @@ wss.on('connection', (ws, request) => {
             headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
             body: (() => {
               const f = new FormData();
-              f.append('file', new Blob([audioBuffer]), 'audio.wav');
+              f.append('file', new Blob([audioBuffer]), `audio${extension}`);
               f.append('model', 'whisper-1');
               f.append('language', fromLang);
               f.append('response_format', 'json');
